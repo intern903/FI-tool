@@ -50,6 +50,23 @@ npm run build    # typecheck + build to dist/
 npm start        # Express serves dist/ and the API on PORT
 ```
 
+## Deploying to Vercel
+
+Vercel serves the built frontend from `dist/` and runs the backend as a
+serverless function at `api/analyze.js` (not the Express server — that's for
+local dev only). Both share `server/analyze.mjs`.
+
+1. Import the repo in Vercel (framework preset: **Vite**).
+2. Add an environment variable **`GEMINI_API_KEY`** with your key value for the
+   Production (and Preview) environments.
+3. Optionally set `GEMINI_MODEL` to override the default model.
+4. Deploy. The audit function's `maxDuration` is set to 60s in `vercel.json`
+   because the Gemini call takes 20–40s (well over Vercel's 10s default).
+
+If Gemini is rate-limited or overloaded on your key, the backend automatically
+tries a chain of models before falling back to the heuristic report, so a busy
+model doesn't take the whole audit down.
+
 ## How analysis works
 
 1. Inputs are validated (at least one of Maps URL / website URL required).

@@ -216,11 +216,28 @@ function buildPrompt(context) {
   return lines.filter((l) => l !== "").join("\n");
 }
 
-export async function generateReport(context) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
-  const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// These are frequently rate-limited or capacity-constrained on shared keys, so
+// we try several in order before giving up. GEMINI_MODEL (if set) goes first.
+const DEFAULT_MODELS = [
+  "gemini-flash-latest",
+  "gemini-flash-lite-latest",
+  "gemini-2.0-flash-001",
+  "gemini-2.0-flash-lite-001",
+];
+
+function modelChain() {
+  const preferred = process.env.GEMINI_MODEL?.trim();
+  const chain = preferred ? [preferred, ...DEFAULT_MODELS] : [...DEFAULT_MODELS];
+  return [...new Set(chain)]; // de-dupe while preserving order
+}
+
+// 429 (rate limit) and 5xx (overload/unavailable) are worth retrying on another
+// model; 400/401/403 are configuration problems that won't fix themselves.
+const isRetryable = (status) => status === 429 || status >= 500;
+
+async function callModel(model, apiKey, prompt) {
   const res = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
     method: "POST",
     headers: {
@@ -228,24 +245,26 @@ export async function generateReport(context) {
       "x-goog-api-key": apiKey,
     },
     body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: buildPrompt(context) }] }],
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.6,
         responseMimeType: "application/json",
         responseSchema: REPORT_SCHEMA,
       },
     }),
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(55_000),
   });
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`Gemini API error ${res.status}: ${detail.slice(0, 300)}`);
+    const err = new Error(`Gemini API error ${res.status} on ${model}: ${detail.slice(0, 200)}`);
+    err.status = res.status;
+    throw err;
   }
 
   const data = await res.json();
   const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ?? "";
-  if (!text) throw new Error("Gemini returned an empty response");
+  if (!text) throw new Error(`Gemini returned an empty response on ${model}`);
 
   let report;
   try {
@@ -265,4 +284,34 @@ export async function generateReport(context) {
     throw new Error("Gemini response did not match the report shape");
   }
   return report;
+}
+
+export async function generateReport(context) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
+  const prompt = buildPrompt(context);
+  const models = modelChain();
+  let lastErr;
+
+  for (const model of models) {
+    // One quick retry per model absorbs a brief 503 spike before moving on.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await callModel(model, apiKey, prompt);
+      } catch (err) {
+        lastErr = err;
+        const status = err.status;
+        if (status && !isRetryable(status)) {
+          // Auth/config error: no other model will behave differently.
+          throw err;
+        }
+        if (attempt === 0 && isRetryable(status)) {
+          await sleep(1200);
+          continue;
+        }
+        break; // move to the next model in the chain
+      }
+    }
+  }
+  throw lastErr ?? new Error("All Gemini models failed");
 }
