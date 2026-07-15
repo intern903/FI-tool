@@ -15,7 +15,9 @@ audit in 20–40 seconds.
 - **30 / 60 / 90 day roadmap** — expandable task timeline
 - **AI recommendations** — why, expected impact, estimated effort
 - **Top 5 quick wins** and **revenue opportunities**
-- **Export** — Download PDF (print-optimized), Share, Copy Link
+- **Export** — Download PDF (a real generated `.pdf` file via jsPDF, no print
+  dialog), plus Share / Copy Link that encode the whole report into the link so
+  it reopens the exact audit with no backend storage
 
 ## Stack
 

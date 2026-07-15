@@ -92,7 +92,7 @@ export function Dashboard({
         )}
 
         <section className="pt-2">
-          <ExportBar businessName={report.businessName} />
+          <ExportBar result={result} />
         </section>
       </div>
     </motion.main>
