@@ -1,163 +1,153 @@
 // Heuristic report generator used when the Gemini API is unreachable, so the
-// product still returns a useful (clearly signal-driven) audit instead of an error.
+// product still returns a useful, signal-driven report instead of an error.
 
-const clamp = (n, lo = 5, hi = 98) => Math.max(lo, Math.min(hi, Math.round(n)));
+const clamp = (n, lo = 8, hi = 96) => Math.max(lo, Math.min(hi, Math.round(n)));
+
+const STAGE_FROM_INPUT = {
+  "Just an idea": "Idea / pre-launch",
+  "Pre-launch": "Idea / pre-launch",
+  "Early stage (0–2 yrs)": "Early stage",
+  "Growing (2–5 yrs)": "Growing",
+  "Established (5+ yrs)": "Established",
+  "Scaling / multi-location": "Scaling",
+};
+
+function inferStage(input, website) {
+  if (input.stage && STAGE_FROM_INPUT[input.stage]) return STAGE_FROM_INPUT[input.stage];
+  if (!input.websiteUrl) return "Idea / pre-launch";
+  if (!website?.reachable) return "Early stage";
+  if ((website?.approxWordCount || 0) > 600) return "Growing";
+  return "Early stage";
+}
 
 export function fallbackReport(context) {
-  const { website, maps, socials, businessName, input } = context;
+  const { website, businessName, input } = context;
+  const challenges = input.challenges || [];
+  const has = (kw) => challenges.some((c) => c.toLowerCase().includes(kw));
 
-  const seo = clamp(
-    30 +
-      (website?.title ? 12 : 0) +
-      (website?.metaDescription ? 14 : 0) +
-      (website?.h1?.length ? 8 : 0) +
-      (website?.hasStructuredData ? 12 : 0) +
-      (website?.https ? 8 : 0) -
-      (website ? Math.min(15, (website.imagesMissingAlt || 0) * 2) : 10)
+  const stage = inferStage(input, website);
+  const isEarly = stage === "Idea / pre-launch" || stage === "Early stage";
+
+  const brand = clamp(
+    (input.websiteUrl ? 35 : 18) +
+      (website?.ogTitle ? 14 : 0) +
+      (website?.metaDescription ? 10 : 0) +
+      (website?.h1?.length ? 8 : 0) -
+      (has("brand awareness") ? 12 : 0)
   );
-  const mapsScore = clamp(
-    (input.googleMapsUrl ? 45 : 15) +
-      (maps?.reachable ? 10 : 0) +
-      (maps?.rating ? Number(maps.rating) * 6 : 8) +
-      (maps?.reviewCount ? Math.min(15, String(maps.reviewCount).length * 4) : 0)
-  );
-  const websiteScore = clamp(
-    (input.websiteUrl ? 35 : 10) +
-      (website?.reachable ? 15 : 0) +
-      (website?.hasViewportMeta ? 12 : 0) +
+  const digital = clamp(
+    (input.websiteUrl ? 32 : 8) +
+      (website?.reachable ? 16 : 0) +
       (website?.https ? 10 : 0) +
-      ((website?.approxWordCount || 0) > 300 ? 10 : 3) +
-      (website?.hasBookingHints || website?.hasWhatsApp ? 8 : 0)
+      ((website?.approxWordCount || 0) > 300 ? 12 : 3) -
+      (has("online presence") ? 10 : 0)
   );
-  const socialCount =
-    Object.keys(socials).length + Object.keys(website?.socialLinksOnSite || {}).length;
-  const socialScore = clamp(18 + Math.min(5, socialCount) * 13);
-  const brandScore = clamp(
-    35 + (website?.ogTitle ? 12 : 0) + (website?.ogDescription ? 10 : 0) + (maps?.category ? 8 : 0) + (website?.h1?.length ? 8 : 0)
+  const product = clamp(
+    40 + (website?.h2?.length ? 10 : 0) + (input.businessDetails ? 8 : 0) - (has("new products") ? 6 : 0)
   );
-  const trustScore = clamp(
-    28 +
-      (website?.https ? 14 : 0) +
-      (maps?.rating ? Number(maps.rating) * 7 : 6) +
-      (website?.hasPhoneLink ? 8 : 0) +
-      (website?.hasEmailLink ? 6 : 0) +
-      (website?.hasStructuredData ? 6 : 0)
+  const distribution = clamp(
+    30 + (website?.hasBookingHints ? 12 : 0) + Object.keys(website?.socialLinksOnSite || {}).length * 6 - (has("customers") ? 8 : 0)
   );
+  const operations = clamp(
+    42 + (website?.hasStructuredData ? 8 : 0) - (has("manual") ? 16 : 0) - (has("operations") ? 8 : 0)
+  );
+  const ai = clamp(20 + (has("manual") ? 6 : 0) + (input.goal === "Automate with AI" ? 14 : 0));
 
-  const health = [
-    { key: "seo", label: "SEO", score: seo, insight: website?.metaDescription ? "Core metadata is present; depth and structure can still improve." : "Key on-page metadata is missing, limiting search visibility." },
-    { key: "maps", label: "Google Maps", score: mapsScore, insight: input.googleMapsUrl ? "Profile exists — review velocity and photo freshness decide local rank." : "No Google Business Profile was provided; this is the top local growth lever." },
-    { key: "website", label: "Website", score: websiteScore, insight: input.websiteUrl ? (website?.hasViewportMeta ? "Site is mobile-ready; conversion paths can be sharpened." : "Site lacks mobile viewport configuration — mobile visitors likely bounce.") : "No website provided; a fast landing page would capture search demand." },
-    { key: "social", label: "Social", score: socialScore, insight: socialCount ? "Some social presence detected; consistency and posting cadence matter next." : "No social profiles detected — an untapped discovery channel." },
-    { key: "brand", label: "Brand", score: brandScore, insight: website?.ogTitle ? "Brand metadata renders well when shared; keep messaging consistent." : "Brand story and share previews are underdeveloped." },
-    { key: "trust", label: "Trust", score: trustScore, insight: website?.https ? "Secure site helps; more reviews and proof points would lift conversion." : "Trust signals (HTTPS, reviews, contact options) need reinforcement." },
+  const snapshot = [
+    { key: "brand", label: "Brand & Identity", score: brand, insight: brand < 50 ? "Your brand story and identity have room to become sharper and more memorable." : "Brand fundamentals are in place; consistency will compound them." },
+    { key: "digital", label: "Digital Presence", score: digital, insight: input.websiteUrl ? (website?.reachable ? "Your site is live; clarity and conversion paths can improve." : "Your site was unreachable during our scan — worth checking.") : "No website yet — a focused online presence is a top early lever." },
+    { key: "product", label: "Product & Offering", score: product, insight: "Your core offering is defined; packaging and positioning can lift perceived value." },
+    { key: "distribution", label: "Distribution & Reach", score: distribution, insight: has("customers") ? "Reaching more of the right customers is your stated challenge — channel focus matters." : "There are untapped channels to put your offering in front of more buyers." },
+    { key: "operations", label: "Operations & Scale", score: operations, insight: has("manual") ? "Manual work is slowing you down — a prime target for automation." : "Operations are functional; tightening them will ease future scale." },
+    { key: "ai", label: "AI Readiness", score: ai, insight: "AI is largely untapped here — a clear opportunity to save time and grow." },
   ];
 
   const overallScore = clamp(
-    health.reduce((s, h) => s + h.score, 0) / health.length,
+    snapshot.reduce((s, d) => s + d.score, 0) / snapshot.length,
     10,
-    96
+    92
   );
 
-  const opp = (title, description, impact, difficulty, expectedResult, timeRequired) => ({
-    title, description, impact, difficulty, expectedResult, timeRequired,
-  });
+  const growthOpportunities = [
+    !input.websiteUrl &&
+      { title: "Establish a focused online presence", description: "A simple, conversion-focused site or landing page gives every other channel somewhere to send people.", impact: "High", effort: "Medium", expectedOutcome: "A credible home base that captures demand", timeframe: "2-4 weeks" },
+    has("brand awareness") &&
+      { title: "Sharpen your brand and messaging", description: "Clarify who you serve, the promise you make, and why you're different — then apply it everywhere consistently.", impact: "High", effort: "Medium", expectedOutcome: "Higher recall and easier word-of-mouth", timeframe: "3-5 weeks" },
+    has("manual") &&
+      { title: "Automate your most repetitive workflow", description: "Identify the task that eats the most hours and remove it with a simple AI or automation setup.", impact: "High", effort: "Low", expectedOutcome: "Hours saved each week, fewer errors", timeframe: "1-2 weeks" },
+    { title: "Build a repeatable customer-acquisition channel", description: "Pick one channel your buyers actually use and make it consistent before adding more.", impact: "High", effort: "Medium", expectedOutcome: "Predictable, measurable lead flow", timeframe: "4-8 weeks" },
+    { title: "Strengthen conversion, not just traffic", description: "Clear offers, proof, and a single obvious call-to-action turn existing interest into revenue.", impact: "Medium", effort: "Low", expectedOutcome: "More revenue from the same audience", timeframe: "2-3 weeks" },
+    { title: "Set up simple analytics", description: "Track where leads and sales come from so every next decision is evidence-based.", impact: "Medium", effort: "Low", expectedOutcome: "Clear ROI on every channel", timeframe: "1 week" },
+  ].filter(Boolean).slice(0, 6);
 
-  const opportunities = [
-    !input.googleMapsUrl &&
-      opp("Claim and complete your Google Business Profile", "You appear to have no active Google Business Profile. Claiming it puts you on the local map pack where most 'near me' purchases start.", "High", "Easy", "Visibility in local search within 1-2 weeks", "2-3 hours"),
-    maps &&
-      opp("Build a steady review engine", "Systematically ask happy customers for Google reviews (QR code at checkout, follow-up message). Rating and recency are the strongest local ranking signals.", "High", "Easy", "+0.2-0.4 rating and 2-3x review velocity in 60 days", "1-2 hours setup"),
-    website && !website.metaDescription &&
-      opp("Fix missing SEO metadata", "Your homepage is missing a meta description. Titles and descriptions are your ad copy in search results.", "High", "Easy", "Higher click-through from existing rankings", "1-2 hours"),
-    website && !website.hasWhatsApp &&
-      opp("Add a WhatsApp / instant-contact CTA", "No low-friction contact channel was detected. A WhatsApp button converts mobile visitors who won't fill out forms.", "High", "Easy", "+10-20% more inbound conversations", "1 hour"),
-    website && !website.hasViewportMeta &&
-      opp("Make the site mobile-first", "The site lacks responsive configuration. Most local searches happen on phones.", "High", "Moderate", "Lower bounce rate, better mobile rankings", "1 week"),
-    opp("Publish location + service landing pages", "Dedicated pages for each core service capture long-tail searches your homepage can't.", "Medium", "Moderate", "New organic entrances within 6-8 weeks", "2-3 weeks"),
-    socialCount < 2 &&
-      opp("Activate one social channel properly", "Rather than being thin everywhere, pick the channel your customers actually use and post consistently.", "Medium", "Moderate", "Steady discovery traffic and social proof", "2 hours/week"),
-    website && (website.imagesMissingAlt || 0) > 3 &&
-      opp("Add alt text to images", `${website.imagesMissingAlt} images are missing alt text — an easy accessibility and image-SEO win.`, "Low", "Easy", "Improved image search visibility", "1-2 hours"),
-    opp("Set up conversion tracking", "Without analytics on calls, forms and direction requests you can't tell which channel pays.", "Low", "Moderate", "Clear ROI picture for every next step", "Half a day"),
-  ].filter(Boolean);
-
-  const baseRating = maps?.rating ? Number(maps.rating) : 4.2;
-  const baseReviews = maps?.reviewCount ? parseInt(String(maps.reviewCount).replace(/\D/g, ""), 10) || 40 : 38;
-  const competitors = [
-    { name: "You", isYou: true, googleRating: baseRating, reviews: baseReviews, seo, speed: websiteScore, social: socialScore, content: clamp(seo - 8), trust: trustScore },
-    { name: "Competitor A", isYou: false, googleRating: 4.6, reviews: Math.round(baseReviews * 2.4) + 40, seo: clamp(seo + 18), speed: 74, social: clamp(socialScore + 24), content: 70, trust: clamp(trustScore + 12) },
-    { name: "Competitor B", isYou: false, googleRating: 4.3, reviews: Math.round(baseReviews * 1.5) + 15, seo: clamp(seo + 8), speed: 66, social: clamp(socialScore + 10), content: 58, trust: clamp(trustScore + 5) },
-    { name: "Competitor C", isYou: false, googleRating: 3.9, reviews: Math.max(12, Math.round(baseReviews * 0.7)), seo: clamp(seo - 6), speed: 58, social: clamp(socialScore - 5), content: 44, trust: clamp(trustScore - 8) },
+  const aiOpportunities = [
+    { title: "Automate customer replies", area: "Support", description: "An AI assistant can answer common questions instantly, 24/7, and hand off only the complex ones.", impact: "High" },
+    { title: "Generate marketing content", area: "Marketing", description: "Draft posts, emails, and product copy in minutes while keeping your brand voice.", impact: "High" },
+    { title: "Streamline operations", area: "Operations", description: "Automate scheduling, follow-ups, and data entry that currently take manual hours.", impact: "Medium" },
+    { title: "Personalize outreach", area: "Sales", description: "Use AI to tailor offers and follow-ups to each lead's context and boost conversion.", impact: "Medium" },
   ];
 
-  const roadmap = [
-    {
-      phase: "30 Days",
-      focus: "Foundation: get found and get contactable",
-      tasks: [
-        { title: "Complete Google Business Profile", detail: "Categories, hours, services, 15+ quality photos, and a keyword-aware description." },
-        { title: "Fix on-page SEO basics", detail: "Unique titles and meta descriptions, one clear H1 per page, image alt text." },
-        { title: "Add instant contact CTAs", detail: "WhatsApp/call buttons visible on every page, especially on mobile." },
-        { title: "Launch the review ask", detail: "QR code in-store plus a post-purchase message with a direct review link." },
-      ],
-    },
-    {
-      phase: "60 Days",
-      focus: "Momentum: content and conversion",
-      tasks: [
-        { title: "Ship 3-4 service landing pages", detail: "One page per core service with local keywords, proof and a single CTA." },
-        { title: "Weekly GBP posts and photos", detail: "Keep the profile visibly alive — freshness feeds the local algorithm." },
-        { title: "Activate the primary social channel", detail: "2-3 posts weekly: work showcases, reviews, behind-the-scenes." },
-        { title: "Install analytics and call tracking", detail: "Measure calls, direction requests, and form fills per channel." },
-      ],
-    },
-    {
-      phase: "90 Days",
-      focus: "Scale: authority and repeatable revenue",
-      tasks: [
-        { title: "Earn 5-10 local citations/backlinks", detail: "Directories, chamber of commerce, local partners and suppliers." },
-        { title: "Launch a referral or repeat offer", detail: "Turn the existing customer base into a predictable revenue channel." },
-        { title: "Publish comparison/FAQ content", detail: "Answer the questions customers ask before buying — capture that intent." },
-        { title: "Review and reprioritize", detail: "Double down on the two channels showing the best cost per lead." },
-      ],
-    },
+  const verdict = (rec) => rec;
+  const expansionStrategies = [
+    { title: "Build a brand", question: "Should I build a brand?", recommendation: brand < 55 ? verdict("Recommended") : verdict("Worth exploring"), rationale: brand < 55 ? "A stronger brand is one of your biggest untapped levers — it makes every marketing dollar work harder." : "Your brand base is decent; invest in consistency rather than a full rebuild." },
+    { title: "Expand distribution", question: "Should I expand distribution?", recommendation: isEarly ? verdict("Worth exploring") : verdict("Recommended"), rationale: isEarly ? "Nail one channel first; expand once you have a repeatable motion." : "You have enough traction to justify adding proven new channels." },
+    { title: "Manufacture in-house", question: "Should I manufacture myself?", recommendation: isEarly ? verdict("Not yet") : verdict("Worth exploring"), rationale: isEarly ? "Stay asset-light until demand is proven — outsource production for now." : "If margins and volume justify it, in-house production could improve control and unit economics." },
+    { title: "Launch new products", question: "Should I launch new products?", recommendation: has("new products") ? verdict("Worth exploring") : verdict("Not yet"), rationale: has("new products") ? "Validate demand with a small test before committing to a full launch." : "Deepen and monetize your current offering before widening the line." },
   ];
 
-  const recommendations = [
-    { title: "Own the local map pack", why: "Most high-intent local customers choose from the top 3 Google Maps results without scrolling.", expectedImpact: "High — primary demand source", estimatedEffort: "Low, ongoing", details: "Complete every profile field, add photos weekly, answer every review within 48 hours, and keep hours accurate. Consistency over 8-12 weeks moves map rankings more than any one-off change." },
-    { title: "Turn reviews into a system, not luck", why: `${baseReviews} reviews is a start, but velocity beats volume: recent reviews signal an active, trusted business.`, expectedImpact: "High — conversion and ranking", estimatedEffort: "Low", details: "Automate the ask at the moment of peak satisfaction. A simple QR card plus a follow-up message doubles review velocity for most local businesses." },
-    { title: "Reduce friction to first contact", why: "Every extra step between interest and conversation loses roughly a third of mobile visitors.", expectedImpact: "Medium-High — direct revenue", estimatedEffort: "Low", details: "Add WhatsApp and tap-to-call above the fold, prefill message templates, and respond within business hours with an auto-acknowledgement." },
-    { title: "Build service pages before blog posts", why: "Commercial-intent pages convert; blog traffic without intent doesn't pay the bills.", expectedImpact: "Medium — compounding organic growth", estimatedEffort: "Medium", details: "One page per service and per neighborhood you serve. Structure: problem, proof, process, price anchor, single CTA." },
-  ];
+  // Rank Soulful Labs programs by fit.
+  const wantsAi = input.goal === "Automate with AI" || has("manual") || has("operations");
+  let ranked;
+  if (isEarly) {
+    ranked = ["Incubation", wantsAi ? "AI Tools" : "Projects & Consulting", "Acceleration", wantsAi ? "Projects & Consulting" : "AI Tools"];
+  } else if (wantsAi) {
+    ranked = ["AI Tools", "Acceleration", "Projects & Consulting", "Incubation"];
+  } else {
+    ranked = ["Acceleration", "AI Tools", "Projects & Consulting", "Incubation"];
+  }
+  const SERVICE_COPY = {
+    Incubation: { what: "Hands-on help to validate, brand, and build your business from the ground up." },
+    Acceleration: { what: "Growth strategy, distribution, and go-to-market support to scale what's working." },
+    "AI Tools": { what: "Ready-to-use AI automations that remove manual work across your business." },
+    "Projects & Consulting": { what: "A bespoke build or focused strategy engagement for your specific need." },
+  };
+  const recommendedServices = ranked.map((service, i) => ({
+    service,
+    fit: i === 0 ? "Best fit" : i === 1 ? "Strong fit" : "Consider",
+    matchScore: clamp(92 - i * 16, 30, 96),
+    why:
+      i === 0
+        ? isEarly
+          ? "You're early, and hands-on help shaping the foundation will de-risk everything that follows."
+          : wantsAi
+            ? "You want to remove manual work and move faster — ready-made AI is the quickest win."
+            : "You have traction; focused growth support is the fastest way to compound it."
+        : "A strong complement once your first priority is underway.",
+    whatYouGet: SERVICE_COPY[service].what,
+  }));
 
-  const quickWins = [
-    { title: "Add a direct review link QR code", description: "Print it at the counter and add it to receipts or follow-ups.", expectedResult: "2-3x review velocity" },
-    { title: "Write a compelling meta description", description: "60-155 characters selling the click for your homepage.", expectedResult: "Higher CTR from search" },
-    { title: "Upload 10 fresh photos to Google", description: "Real work, real team, real space — phones are fine.", expectedResult: "More profile views and direction requests" },
-    { title: "Add WhatsApp click-to-chat", description: "One line of HTML with a prefilled greeting message.", expectedResult: "More mobile inquiries this week" },
-    { title: "Answer every existing review", description: "Reply to all reviews, especially critical ones, professionally.", expectedResult: "Visible trust for every future visitor" },
-  ];
-
-  const revenueOpportunities = [
-    { title: "Improve Google reviews", description: "Ratings above 4.5 with recent activity win the comparison shoppers make between map results.", potential: "+15-25% more calls from Maps" },
-    { title: "Add WhatsApp CTA", description: "Capture mobile visitors who will never fill a contact form.", potential: "+10-20% inbound conversations" },
-    { title: "Optimize GBP photos", description: "Profiles with 100+ photos get dramatically more direction requests and clicks.", potential: "+35% profile engagement" },
-    { title: "Fix technical SEO", description: "Metadata, structured data and mobile performance unlock rankings you already deserve.", potential: "+20-40% organic traffic in a quarter" },
-    { title: "Create service landing pages", description: "Capture long-tail, high-intent searches with dedicated pages.", potential: "New qualified leads every month" },
-    { title: "Improve conversion paths", description: "Clear CTAs, proof and fast pages turn existing traffic into revenue without more spend.", potential: "+10-15% conversion rate" },
+  const nextSteps = [
+    { title: "Review this report with your team", detail: "Align on the two or three opportunities with the best impact-to-effort ratio." },
+    { title: "Pick one quick win to start this week", detail: "Momentum matters more than a perfect plan — ship one improvement now." },
+    { title: `Explore the ${recommendedServices[0].service} program`, detail: "It maps most closely to where your business is today." },
+    { title: "Book a consultation with Soulful Labs", detail: "Get a tailored roadmap and honest guidance on your next best move." },
   ];
 
   return {
     businessName,
-    summary: `${businessName} has a workable foundation with clear, addressable gaps. The fastest gains are in local search presence and reducing friction to contact — both achievable within 30 days, before compounding content and authority work in the following two months.`,
+    industry: input.industry || "Not specified",
+    stage,
+    stageRationale: input.stage
+      ? "Based on the stage you selected and the signals we could gather."
+      : "Inferred from your website and the details provided.",
+    summary: `${businessName} is at the ${stage.toLowerCase()} stage with clear, addressable room to grow. The fastest gains are in ${brand < digital ? "sharpening your brand" : "strengthening your digital presence"} and removing manual work with AI — foundations that make every later move easier.`,
     overallScore,
-    health,
-    opportunities,
-    competitors,
-    roadmap,
-    recommendations,
-    quickWins,
-    revenueOpportunities,
+    snapshot,
+    growthOpportunities,
+    aiOpportunities,
+    expansionStrategies,
+    recommendedServices,
+    nextSteps,
+    consultationPitch: `Let's map out the fastest path forward for ${businessName} — book a free consultation and we'll turn this report into a concrete plan.`,
   };
 }

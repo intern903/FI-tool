@@ -4,12 +4,12 @@ import { Check, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
-  "Reading website...",
-  "Checking Google reviews...",
-  "Analyzing SEO...",
-  "Checking competitors...",
-  "Finding opportunities...",
-  "Generating strategy...",
+  "Reading your website...",
+  "Understanding your business...",
+  "Identifying growth opportunities...",
+  "Mapping AI use cases...",
+  "Matching Soulful Labs programs...",
+  "Preparing your report...",
 ];
 
 // Cumulative seconds at which each step completes (~34s total). The last step

@@ -1,100 +1,108 @@
 import { z } from "zod";
 
-const optionalUrlish = z
+const optionalText = z
   .string()
   .trim()
-  .max(500)
+  .max(2000)
   .optional()
   .or(z.literal(""))
   .transform((v) => (v ? v : undefined));
 
 export const analyzeInputSchema = z
   .object({
-    googleMapsUrl: optionalUrlish,
-    websiteUrl: optionalUrlish,
-    instagram: optionalUrlish,
-    facebook: optionalUrlish,
-    linkedin: optionalUrlish,
-    youtube: optionalUrlish,
-    x: optionalUrlish,
+    websiteUrl: optionalText,
+    businessDetails: optionalText,
+    industry: optionalText,
+    stage: optionalText,
+    goal: optionalText,
+    challenges: z.array(z.string()).default([]),
   })
-  .refine((v) => Boolean(v.googleMapsUrl || v.websiteUrl), {
-    message: "Add your Google Maps link or website — either one works.",
-    path: ["googleMapsUrl"],
+  .refine((v) => Boolean(v.websiteUrl || v.businessDetails), {
+    message: "Add your website URL, or describe your business below — either works.",
+    path: ["websiteUrl"],
   });
 
-/** Raw form values before Zod transforms (fields may be ""). */
 export type AnalyzeFormValues = z.input<typeof analyzeInputSchema>;
-/** Parsed values after Zod transforms (empty strings become undefined). */
 export type AnalyzeInput = z.output<typeof analyzeInputSchema>;
 
-export type HealthKey = "seo" | "maps" | "website" | "social" | "brand" | "trust";
+export type SnapshotKey =
+  | "brand"
+  | "digital"
+  | "product"
+  | "distribution"
+  | "operations"
+  | "ai";
 
-export interface HealthCard {
-  key: HealthKey;
+export interface SnapshotDimension {
+  key: SnapshotKey;
   label: string;
   score: number;
   insight: string;
 }
 
-export interface Opportunity {
+export type Impact = "High" | "Medium" | "Low";
+export type Effort = "Low" | "Medium" | "High";
+
+export interface GrowthOpportunity {
   title: string;
   description: string;
-  impact: "High" | "Medium" | "Low";
-  difficulty: "Easy" | "Moderate" | "Hard";
-  expectedResult: string;
-  timeRequired: string;
+  impact: Impact;
+  effort: Effort;
+  expectedOutcome: string;
+  timeframe: string;
 }
 
-export interface CompetitorRow {
-  name: string;
-  isYou: boolean;
-  googleRating: number;
-  reviews: number;
-  seo: number;
-  speed: number;
-  social: number;
-  content: number;
-  trust: number;
-}
-
-export interface RoadmapPhase {
-  phase: "30 Days" | "60 Days" | "90 Days";
-  focus: string;
-  tasks: { title: string; detail: string }[];
-}
-
-export interface Recommendation {
+export interface AiOpportunity {
   title: string;
+  area: string; // e.g. Marketing, Operations, Sales, Support, Product
+  description: string;
+  impact: Impact;
+}
+
+export type ExpansionVerdict = "Recommended" | "Worth exploring" | "Not yet";
+
+export interface ExpansionStrategy {
+  title: string; // e.g. "Build a brand"
+  question: string; // e.g. "Should I build a brand?"
+  recommendation: ExpansionVerdict;
+  rationale: string;
+}
+
+export type ServiceName =
+  | "Incubation"
+  | "Acceleration"
+  | "AI Tools"
+  | "Projects & Consulting";
+
+export type ServiceFit = "Best fit" | "Strong fit" | "Consider";
+
+export interface RecommendedService {
+  service: ServiceName;
+  fit: ServiceFit;
+  matchScore: number; // 0-100
   why: string;
-  expectedImpact: string;
-  estimatedEffort: string;
-  details: string;
+  whatYouGet: string;
 }
 
-export interface QuickWin {
+export interface NextStep {
   title: string;
-  description: string;
-  expectedResult: string;
-}
-
-export interface RevenueOpportunity {
-  title: string;
-  description: string;
-  potential: string;
+  detail: string;
 }
 
 export interface Report {
   businessName: string;
+  industry: string;
+  stage: string;
+  stageRationale: string;
   summary: string;
-  overallScore: number;
-  health: HealthCard[];
-  opportunities: Opportunity[];
-  competitors: CompetitorRow[];
-  roadmap: RoadmapPhase[];
-  recommendations: Recommendation[];
-  quickWins: QuickWin[];
-  revenueOpportunities: RevenueOpportunity[];
+  overallScore: number; // Growth readiness 0-100
+  snapshot: SnapshotDimension[];
+  growthOpportunities: GrowthOpportunity[];
+  aiOpportunities: AiOpportunity[];
+  expansionStrategies: ExpansionStrategy[];
+  recommendedServices: RecommendedService[];
+  nextSteps: NextStep[];
+  consultationPitch: string;
 }
 
 export interface AnalyzeResponse {
@@ -102,11 +110,10 @@ export interface AnalyzeResponse {
   source: "gemini" | "heuristic";
   context: {
     businessName: string;
+    industry?: string;
     hasWebsite: boolean;
     websiteReachable: boolean;
-    hasMapsProfile: boolean;
-    mapsReachable: boolean;
-    socialCount: number;
-    socialsProvided: string[];
+    hasBusinessDetails: boolean;
+    challenges: string[];
   };
 }

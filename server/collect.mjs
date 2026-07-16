@@ -146,37 +146,27 @@ export async function analyzeMapsUrl(url) {
 }
 
 export async function collectContext(input) {
-  const [website, maps] = await Promise.all([
-    input.websiteUrl ? analyzeWebsite(input.websiteUrl) : Promise.resolve(null),
-    input.googleMapsUrl ? analyzeMapsUrl(input.googleMapsUrl) : Promise.resolve(null),
-  ]);
-
-  const socials = Object.fromEntries(
-    Object.entries(input.socials).filter(([, v]) => Boolean(v))
-  );
+  const website = input.websiteUrl ? await analyzeWebsite(input.websiteUrl) : null;
 
   const businessName =
-    maps?.nameFromPage ||
-    maps?.nameFromUrl ||
     website?.ogTitle ||
     website?.h1?.[0] ||
     (website?.title ? website.title.split(/[|\-–]/)[0].trim() : undefined) ||
-    (input.websiteUrl ? new URL(input.websiteUrl).hostname.replace(/^www\./, "") : "Your business");
+    (input.websiteUrl
+      ? new URL(input.websiteUrl).hostname.replace(/^www\./, "")
+      : "Your business");
 
   return {
     input,
     website,
-    maps,
-    socials,
     businessName,
     summaryForClient: {
       businessName,
+      industry: input.industry,
       hasWebsite: Boolean(input.websiteUrl),
       websiteReachable: Boolean(website?.reachable),
-      hasMapsProfile: Boolean(input.googleMapsUrl),
-      mapsReachable: Boolean(maps?.reachable),
-      socialCount: Object.keys(socials).length,
-      socialsProvided: Object.keys(socials),
+      hasBusinessDetails: Boolean(input.businessDetails),
+      challenges: input.challenges ?? [],
     },
   };
 }

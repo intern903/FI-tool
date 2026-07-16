@@ -114,7 +114,7 @@ export default function App() {
       )}
 
       <footer className="border-t border-ink-900/[0.06] py-8 text-center text-xs text-ink-400">
-        GrowthLens — AI growth audits for local businesses
+        Soulful Labs — AI business growth advisor
       </footer>
     </div>
   );

@@ -4,8 +4,6 @@ import type { Report } from "./types";
 // text API — selectable text, small file, no print dialog. jsPDF is imported
 // lazily so it doesn't weigh down the initial page load.
 
-type Doc = import("jspdf").jsPDF;
-
 const INK: [number, number, number] = [29, 26, 23];
 const MUTED: [number, number, number] = [107, 100, 92];
 const FAINT: [number, number, number] = [150, 142, 132];
@@ -34,7 +32,6 @@ export async function downloadReportPdf(report: Report): Promise<void> {
       y = M;
     }
   };
-
   const setColor = (c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2]);
 
   const text = (
@@ -73,141 +70,98 @@ export async function downloadReportPdf(report: Report): Promise<void> {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   setColor(SAGE);
-  doc.text("GROWTHLENS — AI GROWTH AUDIT", M, y);
+  doc.text("SOULFUL LABS — BUSINESS POSSIBILITIES REPORT", M, y);
   doc.setFont("helvetica", "normal");
   setColor(FAINT);
   doc.text(new Date().toLocaleDateString(), PAGE_W - M, y, { align: "right" });
   y += 22;
 
-  text(report.businessName, { size: 24, style: "bold", gap: 6 });
+  text(report.businessName, { size: 24, style: "bold", gap: 4 });
+  text(`${report.industry}  ·  ${report.stage}`, { size: 10, style: "bold", color: SAGE, gap: 8 });
 
-  // Overall score chip
   const sc = scoreRGB(report.overallScore);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
   setColor(sc);
-  doc.text(`Overall Growth Score: ${report.overallScore}/100`, M, y);
-  y += 20;
+  doc.text(`Growth Readiness: ${report.overallScore}/100`, M, y);
+  y += 18;
 
-  text(report.summary, { size: 10, color: MUTED, gap: 10 });
+  text(report.summary, { size: 10, color: MUTED, gap: 2 });
+  text(report.stageRationale, { size: 9, color: FAINT, gap: 10 });
   rule();
 
-  // ---- Business Health ----
-  sectionTitle("Business Health", "Where you stand today");
-  for (const h of report.health) {
-    ensure(30);
+  // ---- Business Snapshot ----
+  sectionTitle("Business Snapshot", "Where you stand today");
+  for (const d of report.snapshot) {
+    ensure(28);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.5);
     setColor(INK);
-    doc.text(h.label, M, y);
-    const hc = scoreRGB(h.score);
-    setColor(hc);
-    doc.text(`${h.score}/100`, PAGE_W - M, y, { align: "right" });
+    doc.text(d.label, M, y);
+    setColor(scoreRGB(d.score));
+    doc.text(`${d.score}/100`, PAGE_W - M, y, { align: "right" });
     y += 14;
-    text(h.insight, { size: 9, color: MUTED, gap: 8 });
+    text(d.insight, { size: 9, color: MUTED, gap: 7 });
   }
-  rule();
-
-  // ---- Quick Wins ----
-  sectionTitle("Quick Wins", "Top actions for this week");
-  report.quickWins.slice(0, 5).forEach((w, i) => {
-    text(`${i + 1}. ${w.title}`, { size: 11, style: "bold", gap: 2 });
-    text(w.description, { size: 9, color: MUTED, gap: 2 });
-    text(`Expected result: ${w.expectedResult}`, { size: 9, color: SAGE, gap: 8 });
-  });
   rule();
 
   // ---- Growth Opportunities ----
-  sectionTitle("Growth Opportunities", "Prioritized by impact");
-  report.opportunities.forEach((o, i) => {
-    ensure(48);
+  sectionTitle("Growth Opportunities", "Your biggest levers");
+  report.growthOpportunities.forEach((o, i) => {
+    ensure(46);
     text(`${String(i + 1).padStart(2, "0")}  ${o.title}`, { size: 11, style: "bold", gap: 2 });
     text(o.description, { size: 9, color: MUTED, gap: 2 });
-    text(
-      `Impact: ${o.impact}   ·   Difficulty: ${o.difficulty}   ·   Time: ${o.timeRequired}`,
-      { size: 9, style: "bold", color: SAGE, gap: 2 }
-    );
-    text(`Expected result: ${o.expectedResult}`, { size: 9, color: MUTED, gap: 10 });
+    text(`Impact: ${o.impact}   ·   Effort: ${o.effort}   ·   ${o.timeframe}`, { size: 9, style: "bold", color: SAGE, gap: 2 });
+    text(`Expected outcome: ${o.expectedOutcome}`, { size: 9, color: MUTED, gap: 9 });
   });
   rule();
 
-  // ---- Competitor Benchmark ----
-  sectionTitle("Competitor Benchmark", "How you compare");
-  const metrics: { key: keyof Report["competitors"][number]; label: string }[] = [
-    { key: "googleRating", label: "Google Rating" },
-    { key: "reviews", label: "Reviews" },
-    { key: "seo", label: "SEO" },
-    { key: "speed", label: "Speed" },
-    { key: "social", label: "Social" },
-    { key: "content", label: "Content" },
-    { key: "trust", label: "Trust" },
-  ];
-  const cols = report.competitors;
-  const labelW = 110;
-  const colW = (CONTENT_W - labelW) / cols.length;
-  ensure(20);
-  doc.setFontSize(8.5);
-  doc.setFont("helvetica", "bold");
-  setColor(FAINT);
-  doc.text("Metric", M, y);
-  cols.forEach((c, i) => {
-    setColor(c.isYou ? SAGE : FAINT);
-    doc.text(c.name.slice(0, 14), M + labelW + colW * i + colW / 2, y, { align: "center" });
+  // ---- AI Opportunities ----
+  sectionTitle("AI Opportunities", "What AI can do for you");
+  for (const a of report.aiOpportunities) {
+    ensure(30);
+    text(`${a.title}  (${a.area})`, { size: 11, style: "bold", gap: 2 });
+    text(a.description, { size: 9, color: MUTED, gap: 1 });
+    text(`Impact: ${a.impact}`, { size: 9, style: "bold", color: SAGE, gap: 8 });
+  }
+  rule();
+
+  // ---- Expansion Strategies ----
+  sectionTitle("Expansion Strategies", "Should you make these moves?");
+  for (const e of report.expansionStrategies) {
+    ensure(28);
+    text(`${e.question}   →   ${e.recommendation}`, { size: 10.5, style: "bold", gap: 2 });
+    text(e.rationale, { size: 9, color: MUTED, gap: 8 });
+  }
+  rule();
+
+  // ---- Recommended Services ----
+  sectionTitle("Recommended Soulful Labs Services", "Which program fits you");
+  [...report.recommendedServices]
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .forEach((s) => {
+      ensure(40);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11.5);
+      setColor(INK);
+      doc.text(`${s.service}`, M, y);
+      setColor(SAGE);
+      doc.text(`${s.fit} · ${s.matchScore}% match`, PAGE_W - M, y, { align: "right" });
+      y += 14;
+      text(s.why, { size: 9, color: MUTED, gap: 1 });
+      text(s.whatYouGet, { size: 9, color: FAINT, gap: 9 });
+    });
+  rule();
+
+  // ---- Next Steps ----
+  sectionTitle("Next Steps", "Your next best moves");
+  report.nextSteps.forEach((s, i) => {
+    text(`${i + 1}. ${s.title}`, { size: 10.5, style: "bold", gap: 1 });
+    text(s.detail, { size: 9, color: MUTED, x: M + 16, gap: 6 });
   });
-  y += 12;
-  for (const m of metrics) {
-    ensure(14);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    setColor(MUTED);
-    doc.text(m.label, M, y);
-    cols.forEach((c, i) => {
-      const raw = c[m.key] as number;
-      const val = m.key === "googleRating" ? raw.toFixed(1) : String(raw);
-      doc.setFont("helvetica", c.isYou ? "bold" : "normal");
-      setColor(c.isYou ? INK : MUTED);
-      doc.text(val, M + labelW + colW * i + colW / 2, y, { align: "center" });
-    });
-    y += 13;
-  }
-  y += 8;
-  rule();
-
-  // ---- Roadmap ----
-  sectionTitle("30 / 60 / 90 Day Roadmap", "Your next three months");
-  for (const phase of report.roadmap) {
-    text(`${phase.phase} — ${phase.focus}`, { size: 11, style: "bold", gap: 3 });
-    for (const t of phase.tasks) {
-      text(`•  ${t.title}`, { size: 9.5, style: "bold", color: INK, gap: 1 });
-      text(t.detail, { size: 9, color: MUTED, x: M + 14, gap: 4 });
-    }
-    y += 4;
-  }
-  rule();
-
-  // ---- Recommendations ----
-  sectionTitle("AI Recommendations", "Strategic moves worth making");
-  for (const rec of report.recommendations) {
-    ensure(46);
-    text(rec.title, { size: 11, style: "bold", gap: 2 });
-    text(`Why: ${rec.why}`, { size: 9, color: MUTED, gap: 1 });
-    text(`Expected impact: ${rec.expectedImpact}   ·   Effort: ${rec.estimatedEffort}`, {
-      size: 9,
-      style: "bold",
-      color: SAGE,
-      gap: 1,
-    });
-    text(rec.details, { size: 9, color: MUTED, gap: 8 });
-  }
-  rule();
-
-  // ---- Revenue ----
-  sectionTitle("Revenue Opportunities", "Where the money is");
-  for (const r of report.revenueOpportunities) {
-    text(r.title, { size: 11, style: "bold", gap: 2 });
-    text(r.description, { size: 9, color: MUTED, gap: 1 });
-    text(`Potential: ${r.potential}`, { size: 9, style: "bold", color: SAGE, gap: 8 });
-  }
+  y += 4;
+  text(report.consultationPitch, { size: 10, style: "bold", color: SAGE, gap: 4 });
+  text("Book a consultation at soulfullabs.ai", { size: 9, color: MUTED, gap: 4 });
 
   // ---- Footer on every page ----
   const pages = doc.getNumberOfPages();
@@ -216,10 +170,10 @@ export async function downloadReportPdf(report: Report): Promise<void> {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     setColor(FAINT);
-    doc.text("Generated by GrowthLens — AI growth audits for local businesses", M, PAGE_H - 24);
+    doc.text("Generated by Soulful Labs — AI business growth advisor", M, PAGE_H - 24);
     doc.text(`${p} / ${pages}`, PAGE_W - M, PAGE_H - 24, { align: "right" });
   }
 
   const safeName = report.businessName.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-") || "business";
-  doc.save(`GrowthLens-${safeName}-audit.pdf`);
+  doc.save(`SoulfulLabs-${safeName}-report.pdf`);
 }

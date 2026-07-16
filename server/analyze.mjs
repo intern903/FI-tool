@@ -15,18 +15,24 @@ function normalizeUrl(value) {
   return URL_RE.test(v) ? v : `https://${v}`;
 }
 
+const clean = (v) => {
+  if (typeof v !== "string") return undefined;
+  const t = v.trim();
+  return t ? t.slice(0, 2000) : undefined;
+};
+
 export function parseInput(body) {
   const b = body ?? {};
+  const challenges = Array.isArray(b.challenges)
+    ? b.challenges.filter((c) => typeof c === "string").slice(0, 12).map((c) => c.slice(0, 120))
+    : [];
   return {
-    googleMapsUrl: normalizeUrl(b.googleMapsUrl),
     websiteUrl: normalizeUrl(b.websiteUrl),
-    socials: {
-      instagram: normalizeUrl(b.instagram),
-      facebook: normalizeUrl(b.facebook),
-      linkedin: normalizeUrl(b.linkedin),
-      youtube: normalizeUrl(b.youtube),
-      x: normalizeUrl(b.x),
-    },
+    businessDetails: clean(b.businessDetails),
+    industry: clean(b.industry),
+    stage: clean(b.stage),
+    goal: clean(b.goal),
+    challenges,
   };
 }
 
@@ -37,20 +43,18 @@ export function parseInput(body) {
 export async function runAnalysis(body) {
   const input = parseInput(body);
 
-  if (!input.googleMapsUrl && !input.websiteUrl) {
+  if (!input.websiteUrl && !input.businessDetails) {
     return {
       status: 400,
-      body: { error: "Provide a Google Maps business URL, a website URL, or both." },
+      body: { error: "Add your website URL, or describe your business — either one works." },
     };
   }
-  for (const url of [input.googleMapsUrl, input.websiteUrl]) {
-    if (url) {
-      try {
-        const parsed = new URL(url);
-        if (!/^https?:$/.test(parsed.protocol)) throw new Error("bad protocol");
-      } catch {
-        return { status: 400, body: { error: `"${url}" is not a valid URL.` } };
-      }
+  if (input.websiteUrl) {
+    try {
+      const parsed = new URL(input.websiteUrl);
+      if (!/^https?:$/.test(parsed.protocol)) throw new Error("bad protocol");
+    } catch {
+      return { status: 400, body: { error: `"${input.websiteUrl}" is not a valid URL.` } };
     }
   }
 

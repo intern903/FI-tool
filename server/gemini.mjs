@@ -5,21 +5,34 @@ const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models
 
 const str = { type: "STRING" };
 const int = { type: "INTEGER" };
-const num = { type: "NUMBER" };
 
 export const REPORT_SCHEMA = {
   type: "OBJECT",
   properties: {
     businessName: str,
-    summary: { ...str, description: "2-3 sentence executive summary of the audit" },
-    overallScore: { ...int, description: "Overall growth health score, 0-100" },
-    health: {
+    industry: { ...str, description: "The business's industry, confirmed or inferred" },
+    stage: {
+      ...str,
+      description:
+        "Current business stage, one short phrase, e.g. 'Idea / pre-launch', 'Early stage', 'Growing', 'Established', 'Scaling'",
+    },
+    stageRationale: { ...str, description: "One sentence on why this stage was assigned" },
+    summary: {
+      ...str,
+      description: "2-3 sentence plain-language understanding of the business as it is today",
+    },
+    overallScore: { ...int, description: "Overall growth-readiness score, 0-100" },
+    snapshot: {
       type: "ARRAY",
-      description: "Exactly 6 items, keys: seo, maps, website, social, brand, trust",
+      description:
+        "Exactly 6 dimensions with keys: brand, digital, product, distribution, operations, ai",
       items: {
         type: "OBJECT",
         properties: {
-          key: { ...str, enum: ["seo", "maps", "website", "social", "brand", "trust"] },
+          key: {
+            ...str,
+            enum: ["brand", "digital", "product", "distribution", "operations", "ai"],
+          },
           label: str,
           score: { ...int, description: "0-100" },
           insight: { ...str, description: "One concise sentence on the current state" },
@@ -27,130 +40,130 @@ export const REPORT_SCHEMA = {
         required: ["key", "label", "score", "insight"],
       },
     },
-    opportunities: {
+    growthOpportunities: {
       type: "ARRAY",
-      description: "6-9 prioritized growth opportunities",
+      description: "4-6 prioritized growth opportunities, highest impact first",
       items: {
         type: "OBJECT",
         properties: {
           title: str,
           description: str,
           impact: { ...str, enum: ["High", "Medium", "Low"] },
-          difficulty: { ...str, enum: ["Easy", "Moderate", "Hard"] },
-          expectedResult: str,
-          timeRequired: { ...str, description: "e.g. '2-3 hours' or '1 week'" },
+          effort: { ...str, enum: ["Low", "Medium", "High"] },
+          expectedOutcome: str,
+          timeframe: { ...str, description: "e.g. '2-4 weeks' or '1-3 months'" },
         },
-        required: ["title", "description", "impact", "difficulty", "expectedResult", "timeRequired"],
+        required: ["title", "description", "impact", "effort", "expectedOutcome", "timeframe"],
       },
     },
-    competitors: {
+    aiOpportunities: {
+      type: "ARRAY",
+      description: "3-5 concrete ways AI can automate or improve this specific business",
+      items: {
+        type: "OBJECT",
+        properties: {
+          title: str,
+          area: {
+            ...str,
+            description: "Business area, e.g. Marketing, Operations, Sales, Support, Product",
+          },
+          description: { ...str, description: "What it automates and the benefit, one or two sentences" },
+          impact: { ...str, enum: ["High", "Medium", "Low"] },
+        },
+        required: ["title", "area", "description", "impact"],
+      },
+    },
+    expansionStrategies: {
       type: "ARRAY",
       description:
-        "Exactly 4 rows: first the audited business (isYou=true, name='You'), then 3 realistic local competitor archetypes named 'Competitor A/B/C'",
+        "4-6 strategic possibilities framed as decisions. MUST include: building a brand, expanding distribution, manufacturing in-house, and launching new products. Add others if relevant.",
       items: {
         type: "OBJECT",
         properties: {
-          name: str,
-          isYou: { type: "BOOLEAN" },
-          googleRating: { ...num, description: "0.0-5.0" },
-          reviews: int,
-          seo: { ...int, description: "0-100" },
-          speed: { ...int, description: "0-100" },
-          social: { ...int, description: "0-100" },
-          content: { ...int, description: "0-100" },
-          trust: { ...int, description: "0-100" },
+          title: { ...str, description: "e.g. 'Build a brand'" },
+          question: { ...str, description: "e.g. 'Should I build a brand?'" },
+          recommendation: { ...str, enum: ["Recommended", "Worth exploring", "Not yet"] },
+          rationale: { ...str, description: "1-2 sentences justifying the recommendation for THIS business" },
         },
-        required: ["name", "isYou", "googleRating", "reviews", "seo", "speed", "social", "content", "trust"],
+        required: ["title", "question", "recommendation", "rationale"],
       },
     },
-    roadmap: {
+    recommendedServices: {
       type: "ARRAY",
-      description: "Exactly 3 phases: 30 Days, 60 Days, 90 Days",
+      description:
+        "Exactly 4 items — one per Soulful Labs program (Incubation, Acceleration, AI Tools, Projects & Consulting) — ranked by fit for this business, best first.",
       items: {
         type: "OBJECT",
         properties: {
-          phase: { ...str, enum: ["30 Days", "60 Days", "90 Days"] },
-          focus: { ...str, description: "One-line theme of the phase" },
-          tasks: {
-            type: "ARRAY",
-            description: "3-5 tasks",
-            items: {
-              type: "OBJECT",
-              properties: { title: str, detail: str },
-              required: ["title", "detail"],
-            },
+          service: {
+            ...str,
+            enum: ["Incubation", "Acceleration", "AI Tools", "Projects & Consulting"],
           },
+          fit: { ...str, enum: ["Best fit", "Strong fit", "Consider"] },
+          matchScore: { ...int, description: "How well it fits this business, 0-100" },
+          why: { ...str, description: "Why this program fits (or doesn't yet) for this specific business" },
+          whatYouGet: { ...str, description: "What the business would get from this program" },
         },
-        required: ["phase", "focus", "tasks"],
+        required: ["service", "fit", "matchScore", "why", "whatYouGet"],
       },
     },
-    recommendations: {
+    nextSteps: {
       type: "ARRAY",
-      description: "4-6 strategic AI recommendations",
+      description: "3-5 concrete, sequenced next steps the owner should take",
       items: {
         type: "OBJECT",
-        properties: {
-          title: str,
-          why: str,
-          expectedImpact: str,
-          estimatedEffort: str,
-          details: { ...str, description: "2-3 sentences shown when the user expands 'Learn More'" },
-        },
-        required: ["title", "why", "expectedImpact", "estimatedEffort", "details"],
+        properties: { title: str, detail: str },
+        required: ["title", "detail"],
       },
     },
-    quickWins: {
-      type: "ARRAY",
-      description: "Exactly 5 highest-leverage quick actions",
-      items: {
-        type: "OBJECT",
-        properties: { title: str, description: str, expectedResult: str },
-        required: ["title", "description", "expectedResult"],
-      },
-    },
-    revenueOpportunities: {
-      type: "ARRAY",
-      description: "4-6 concrete revenue opportunities",
-      items: {
-        type: "OBJECT",
-        properties: {
-          title: str,
-          description: str,
-          potential: { ...str, description: "Plain-language upside, e.g. '+15-20% inbound calls'" },
-        },
-        required: ["title", "description", "potential"],
-      },
+    consultationPitch: {
+      ...str,
+      description:
+        "One warm, specific sentence inviting them to book a consultation with Soulful Labs, referencing their situation",
     },
   },
   required: [
     "businessName",
+    "industry",
+    "stage",
+    "stageRationale",
     "summary",
     "overallScore",
-    "health",
-    "opportunities",
-    "competitors",
-    "roadmap",
-    "recommendations",
-    "quickWins",
-    "revenueOpportunities",
+    "snapshot",
+    "growthOpportunities",
+    "aiOpportunities",
+    "expansionStrategies",
+    "recommendedServices",
+    "nextSteps",
+    "consultationPitch",
   ],
 };
 
+const SERVICE_BRIEF = `SOULFUL LABS PROGRAMS (recommend the best-fit ones):
+- Incubation (0 -> 1): for idea-stage / pre-launch founders. Hands-on help to validate, shape brand & product, and build a real foundation from scratch.
+- Acceleration (1 -> 10): for businesses that already have traction and want to scale — growth strategy, distribution, go-to-market.
+- AI Tools (automate): ready-to-use AI products and automations that remove manual work across marketing, operations, sales, and support.
+- Projects & Consulting (custom): bespoke builds and expert strategy for a specific, defined need — custom software or a focused growth/strategy engagement.`;
+
 function buildPrompt(context) {
-  const { input, website, maps, socials, businessName } = context;
+  const { input, website, businessName } = context;
   const lines = [
-    "You are a senior growth consultant at a top-tier business growth agency.",
-    "Audit the local business below using ONLY the collected public signals, and produce a personalized, specific, actionable growth strategy.",
-    "Be concrete: reference the business's actual situation (missing metadata, review counts, absent channels) rather than generic advice.",
-    "Scores must be honest and internally consistent with the signals. Do not invent facts that contradict the data; where data is missing, treat it as a gap to fix.",
+    "You are a senior business growth advisor at Soulful Labs, an AI-first venture studio.",
+    "Analyze the business below and produce a personalized 'Business Possibilities' report that helps the owner understand their next best steps, and recommends the most relevant Soulful Labs program(s).",
+    "Be specific and grounded in the details provided — reference their industry, stage, and stated challenges. Where information is missing, treat it as a gap or an assumption to make explicit, never invent facts that contradict the inputs.",
+    "",
+    SERVICE_BRIEF,
     "",
     `BUSINESS NAME (best guess): ${businessName}`,
-    "",
-    "PROVIDED INPUTS:",
-    `- Google Maps URL: ${input.googleMapsUrl || "not provided"}`,
-    `- Website URL: ${input.websiteUrl || "not provided"}`,
-    `- Social profiles provided: ${Object.keys(socials).length ? Object.entries(socials).map(([k, v]) => `${k}: ${v}`).join(", ") : "none"}`,
+    `INDUSTRY: ${input.industry || "not specified — infer from the website/details"}`,
+    `SELF-REPORTED STAGE: ${input.stage || "not specified — infer it"}`,
+    `PRIMARY GOAL: ${input.goal || "not specified"}`,
+    `CURRENT CHALLENGES: ${input.challenges?.length ? input.challenges.join("; ") : "not specified"}`,
   ];
+
+  if (input.businessDetails) {
+    lines.push("", "BUSINESS DETAILS (owner's own words):", input.businessDetails);
+  }
 
   if (website) {
     lines.push(
@@ -158,59 +171,34 @@ function buildPrompt(context) {
       "WEBSITE SIGNALS:",
       JSON.stringify(
         {
+          url: website.url,
           reachable: website.reachable,
           https: website.https,
           title: website.title,
           metaDescription: website.metaDescription,
           ogTitle: website.ogTitle,
-          ogDescription: website.ogDescription,
           h1: website.h1,
           h2: website.h2,
-          hasViewportMeta: website.hasViewportMeta,
           hasStructuredData: website.hasStructuredData,
           hasWhatsApp: website.hasWhatsApp,
-          hasPhoneLink: website.hasPhoneLink,
-          hasEmailLink: website.hasEmailLink,
           hasBookingHints: website.hasBookingHints,
-          imageCount: website.imageCount,
-          imagesMissingAlt: website.imagesMissingAlt,
-          socialLinksFoundOnSite: website.socialLinksOnSite,
           approxWordCount: website.approxWordCount,
+          socialLinksFoundOnSite: website.socialLinksOnSite,
           error: website.error,
         },
         null,
         1
       ),
-      "",
       website.textSample ? `WEBSITE TEXT SAMPLE:\n${website.textSample}` : ""
-    );
-  }
-  if (maps) {
-    lines.push(
-      "",
-      "GOOGLE MAPS SIGNALS (best effort, may be partial):",
-      JSON.stringify(
-        {
-          reachable: maps.reachable,
-          nameFromUrl: maps.nameFromUrl,
-          nameFromPage: maps.nameFromPage,
-          description: maps.description,
-          rating: maps.rating,
-          reviewCount: maps.reviewCount,
-          category: maps.category,
-          error: maps.error,
-        },
-        null,
-        1
-      )
     );
   }
 
   lines.push(
     "",
-    "Return the full audit as JSON matching the response schema.",
-    "The competitor benchmark should model 3 realistic local competitor archetypes (label them Competitor A, Competitor B, Competitor C) for this business category and locale.",
-    "Order opportunities from highest to lowest impact. Keep every text field crisp — this renders in a premium dashboard."
+    "Return the full report as JSON matching the response schema.",
+    "The recommendedServices array MUST contain all four programs, ranked by fit for this business with exactly one clear 'Best fit'.",
+    "The expansionStrategies MUST address building a brand, expanding distribution, manufacturing in-house, and launching new products, each with an honest recommendation for THIS business.",
+    "Keep every text field crisp and confident — this renders in a premium dashboard for a real business owner."
   );
 
   return lines.filter((l) => l !== "").join("\n");
@@ -278,8 +266,8 @@ async function callModel(model, apiKey, prompt) {
 
   if (
     typeof report.overallScore !== "number" ||
-    !Array.isArray(report.health) ||
-    !Array.isArray(report.opportunities)
+    !Array.isArray(report.snapshot) ||
+    !Array.isArray(report.recommendedServices)
   ) {
     throw new Error("Gemini response did not match the report shape");
   }
