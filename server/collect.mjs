@@ -3,7 +3,7 @@
 // Profile details. Everything here is measured/scraped so the audit that builds
 // on it is deterministic and traceable, not asserted.
 
-const FETCH_TIMEOUT_MS = 12_000;
+const FETCH_TIMEOUT_MS = 9_000;
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 SoulfulLabsBot/1.0";
 

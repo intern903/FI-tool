@@ -5,14 +5,17 @@
 // deterministic signals we measure ourselves. It never blocks the report.
 
 const PSI_ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
-const PSI_TIMEOUT_MS = 14_000;
+const PSI_TIMEOUT_MS = 8_000;
 
 export async function runPsi(url) {
   if (!url) return null;
-  const params = new URLSearchParams({ url, category: "PERFORMANCE", strategy: "MOBILE" });
-  // A PSI/Google API key is optional; reuse one if present, otherwise go unkeyed.
+  // Only run when a key is configured. Unkeyed PSI is slow and rate-limited, and
+  // on a time-boxed serverless function that latency risks a gateway timeout;
+  // the deterministic audit already stands on our own measured signals.
   const key = process.env.PSI_API_KEY || "";
-  if (key) params.set("key", key);
+  if (!key) return null;
+  const params = new URLSearchParams({ url, category: "PERFORMANCE", strategy: "MOBILE" });
+  params.set("key", key);
 
   try {
     const res = await fetch(`${PSI_ENDPOINT}?${params.toString()}`, {

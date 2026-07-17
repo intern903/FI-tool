@@ -106,7 +106,13 @@ export async function runAnalysis(body) {
     }
   }
 
-  // Kick off PageSpeed Insights in parallel; it's best-effort and never blocks.
+  // Overall time budget so we always return before the serverless gateway (60s)
+  // times out — if the AI can't finish in time we fall back to the instant
+  // heuristic report rather than 504-ing.
+  const deadline = Date.now() + 50_000;
+
+  // PageSpeed Insights is best-effort and only runs when keyed (see psi.mjs);
+  // it never blocks the report.
   const psiPromise = input.websiteUrl ? runPsi(input.websiteUrl) : Promise.resolve(null);
 
   const stage = detectStage(input);
@@ -116,7 +122,7 @@ export async function runAnalysis(body) {
   let ai;
   let source = "gemini";
   try {
-    ai = await generateReport(context, audit, stage);
+    ai = await generateReport(context, audit, stage, deadline);
   } catch (err) {
     console.error("Gemini generation failed, using heuristic fallback:", err.message);
     ai = fallbackReport(context, audit, stage);

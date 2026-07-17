@@ -280,7 +280,7 @@ function modelChain() {
 
 const isRetryable = (status) => status === 429 || status >= 500;
 
-async function callModel(model, apiKey, prompt) {
+async function callModel(model, apiKey, prompt, timeoutMs) {
   const res = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -292,7 +292,7 @@ async function callModel(model, apiKey, prompt) {
         responseSchema: REPORT_SCHEMA,
       },
     }),
-    signal: AbortSignal.timeout(55_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!res.ok) {
@@ -321,7 +321,12 @@ async function callModel(model, apiKey, prompt) {
   return report;
 }
 
-export async function generateReport(context, audit, stage) {
+const PER_CALL_CAP_MS = 38_000;
+const MIN_ATTEMPT_MS = 7_000;
+
+// `deadline` is an absolute epoch (ms) by which we must give up so the caller can
+// fall back to the instant heuristic before the serverless gateway times out.
+export async function generateReport(context, audit, stage, deadline = Date.now() + 50_000) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
   const prompt = buildPrompt(context, audit, stage);
@@ -329,20 +334,17 @@ export async function generateReport(context, audit, stage) {
   let lastErr;
 
   for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        return await callModel(model, apiKey, prompt);
-      } catch (err) {
-        lastErr = err;
-        const status = err.status;
-        if (status && !isRetryable(status)) throw err;
-        if (attempt === 0 && isRetryable(status)) {
-          await sleep(1200);
-          continue;
-        }
-        break;
-      }
+    const remaining = deadline - Date.now();
+    if (remaining < MIN_ATTEMPT_MS) break; // no time for another model — hand off to fallback
+    const timeoutMs = Math.min(PER_CALL_CAP_MS, remaining);
+    try {
+      return await callModel(model, apiKey, prompt, timeoutMs);
+    } catch (err) {
+      lastErr = err;
+      const status = err.status;
+      if (status && !isRetryable(status)) throw err;
+      // retryable (429/5xx) or timeout: move to the next model within budget
     }
   }
-  throw lastErr ?? new Error("All Gemini models failed");
+  throw lastErr ?? new Error("All Gemini models failed within the time budget");
 }
