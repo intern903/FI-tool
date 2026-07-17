@@ -1,48 +1,53 @@
 // Gemini integration. The API key lives in server-side env only and is never
-// sent to or requested from the browser.
+// sent to or requested from the browser. The hero Business Health Score and the
+// deterministic audit are computed server-side; the model supplies the
+// qualitative analysis and is told to ground it in the measured audit evidence.
 
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 const str = { type: "STRING" };
 const int = { type: "INTEGER" };
+const num = { type: "NUMBER" };
+const bool = { type: "BOOLEAN" };
+
+const evidencedList = {
+  type: "ARRAY",
+  description: "2-4 items, each tracing back to a concrete audit finding or provided detail",
+  items: {
+    type: "OBJECT",
+    properties: {
+      point: str,
+      evidence: { ...str, description: "The specific finding/signal this is based on" },
+    },
+    required: ["point", "evidence"],
+  },
+};
 
 export const REPORT_SCHEMA = {
   type: "OBJECT",
   properties: {
     businessName: str,
-    industry: { ...str, description: "The business's industry, confirmed or inferred" },
-    stage: {
-      ...str,
-      description:
-        "Current business stage, one short phrase, e.g. 'Idea / pre-launch', 'Early stage', 'Growing', 'Established', 'Scaling'",
-    },
-    stageRationale: { ...str, description: "One sentence on why this stage was assigned" },
-    summary: {
-      ...str,
-      description: "2-3 sentence plain-language understanding of the business as it is today",
-    },
-    overallScore: { ...int, description: "Overall growth-readiness score, 0-100" },
+    industry: str,
+    stage: { ...str, description: "Echo the DETECTED STAGE provided in the prompt" },
+    stageRationale: str,
+    summary: { ...str, description: "2-3 sentence plain-language understanding of the business today" },
     snapshot: {
       type: "ARRAY",
-      description:
-        "Exactly 6 dimensions with keys: brand, digital, product, distribution, operations, ai",
+      description: "Exactly 6 dimensions: brand, digital, product, distribution, operations, ai. Scores must be consistent with the audit evidence.",
       items: {
         type: "OBJECT",
         properties: {
-          key: {
-            ...str,
-            enum: ["brand", "digital", "product", "distribution", "operations", "ai"],
-          },
+          key: { ...str, enum: ["brand", "digital", "product", "distribution", "operations", "ai"] },
           label: str,
           score: { ...int, description: "0-100" },
-          insight: { ...str, description: "One concise sentence on the current state" },
+          insight: { ...str, description: "One sentence; reference the evidence where possible" },
         },
         required: ["key", "label", "score", "insight"],
       },
     },
     growthOpportunities: {
       type: "ARRAY",
-      description: "4-6 prioritized growth opportunities, highest impact first",
+      description: "4-6 prioritized opportunities, highest impact first",
       items: {
         type: "OBJECT",
         properties: {
@@ -51,154 +56,208 @@ export const REPORT_SCHEMA = {
           impact: { ...str, enum: ["High", "Medium", "Low"] },
           effort: { ...str, enum: ["Low", "Medium", "High"] },
           expectedOutcome: str,
-          timeframe: { ...str, description: "e.g. '2-4 weeks' or '1-3 months'" },
+          timeframe: str,
         },
         required: ["title", "description", "impact", "effort", "expectedOutcome", "timeframe"],
       },
     },
     aiOpportunities: {
       type: "ARRAY",
-      description: "3-5 concrete ways AI can automate or improve this specific business",
+      description: "3-5 AI automation opportunities, each with realistic quantified savings for a business of this size",
       items: {
         type: "OBJECT",
         properties: {
           title: str,
-          area: {
-            ...str,
-            description: "Business area, e.g. Marketing, Operations, Sales, Support, Product",
-          },
-          description: { ...str, description: "What it automates and the benefit, one or two sentences" },
+          area: { ...str, description: "Marketing, Operations, Sales, Support, or Product" },
+          description: str,
           impact: { ...str, enum: ["High", "Medium", "Low"] },
+          hoursSavedPerWeek: { ...int, description: "Estimated hours saved per week" },
+          monthlySavingsInr: { ...int, description: "Estimated monthly saving/gain in INR (rupees)" },
         },
-        required: ["title", "area", "description", "impact"],
+        required: ["title", "area", "description", "impact", "hoursSavedPerWeek", "monthlySavingsInr"],
       },
+    },
+    swot: {
+      type: "OBJECT",
+      description: "Each point must cite a concrete audit finding or provided detail as evidence",
+      properties: {
+        strengths: evidencedList,
+        weaknesses: evidencedList,
+        opportunities: evidencedList,
+        threats: evidencedList,
+      },
+      required: ["strengths", "weaknesses", "opportunities", "threats"],
     },
     expansionStrategies: {
       type: "ARRAY",
-      description:
-        "4-6 strategic possibilities framed as decisions. MUST include: building a brand, expanding distribution, manufacturing in-house, and launching new products. Add others if relevant.",
+      description: "4-6 strategic decisions. MUST include building a brand, expanding distribution, manufacturing in-house, and launching new products.",
       items: {
         type: "OBJECT",
         properties: {
-          title: { ...str, description: "e.g. 'Build a brand'" },
-          question: { ...str, description: "e.g. 'Should I build a brand?'" },
+          title: str,
+          question: str,
           recommendation: { ...str, enum: ["Recommended", "Worth exploring", "Not yet"] },
-          rationale: { ...str, description: "1-2 sentences justifying the recommendation for THIS business" },
+          rationale: str,
         },
         required: ["title", "question", "recommendation", "rationale"],
       },
     },
-    recommendedServices: {
+    competitorBenchmark: {
+      type: "OBJECT",
+      description: "Lightweight benchmark: category averages + 2-3 realistic named local/category competitors with plausible public signals (0-100 for seo/speed/social).",
+      properties: {
+        summary: str,
+        category: {
+          type: "OBJECT",
+          properties: { googleRating: num, reviews: int, seo: int, speed: int, social: int },
+          required: ["googleRating", "reviews", "seo", "speed", "social"],
+        },
+        competitors: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              name: str,
+              googleRating: num,
+              reviews: int,
+              seo: int,
+              speed: int,
+              social: int,
+              note: str,
+            },
+            required: ["name", "googleRating", "reviews", "seo", "speed", "social", "note"],
+          },
+        },
+      },
+      required: ["summary", "category", "competitors"],
+    },
+    personas: {
       type: "ARRAY",
-      description:
-        "Exactly 4 items — one per Soulful Labs program (Incubation, Acceleration, AI Tools, Projects & Consulting) — ranked by fit for this business, best first.",
+      description: "2-3 target customer personas",
       items: {
         type: "OBJECT",
         properties: {
-          service: {
-            ...str,
-            enum: ["Incubation", "Acceleration", "AI Tools", "Projects & Consulting"],
+          name: { ...str, description: "A short persona label, e.g. 'Busy Urban Pet Parent'" },
+          description: str,
+          needs: str,
+          channels: { ...str, description: "Where to reach them" },
+        },
+        required: ["name", "description", "needs", "channels"],
+      },
+    },
+    journey: {
+      type: "ARRAY",
+      description: "Customer journey — exactly 4 stages: Awareness, Consideration, Purchase, Retention",
+      items: {
+        type: "OBJECT",
+        properties: {
+          stage: { ...str, enum: ["Awareness", "Consideration", "Purchase", "Retention"] },
+          touchpoint: str,
+          opportunity: str,
+        },
+        required: ["stage", "touchpoint", "opportunity"],
+      },
+    },
+    roadmap: {
+      type: "ARRAY",
+      description: "Exactly 3 phases: 30 Days, 60 Days, 90 Days. Front-load quick wins in the 30-day phase.",
+      items: {
+        type: "OBJECT",
+        properties: {
+          phase: { ...str, enum: ["30 Days", "60 Days", "90 Days"] },
+          focus: str,
+          tasks: {
+            type: "ARRAY",
+            description: "3-5 tasks",
+            items: {
+              type: "OBJECT",
+              properties: {
+                title: str,
+                detail: str,
+                impact: { ...str, enum: ["High", "Medium", "Low"] },
+                effort: { ...str, enum: ["Low", "Medium", "High"] },
+                quickWin: { ...bool, description: "True if high-impact and low-effort" },
+              },
+              required: ["title", "detail", "impact", "effort", "quickWin"],
+            },
           },
+        },
+        required: ["phase", "focus", "tasks"],
+      },
+    },
+    recommendedServices: {
+      type: "ARRAY",
+      description: "Exactly 4 — one per Soulful Labs program (Incubation, Acceleration, AI Tools, Projects & Consulting), ranked by fit, exactly one 'Best fit'.",
+      items: {
+        type: "OBJECT",
+        properties: {
+          service: { ...str, enum: ["Incubation", "Acceleration", "AI Tools", "Projects & Consulting"] },
           fit: { ...str, enum: ["Best fit", "Strong fit", "Consider"] },
-          matchScore: { ...int, description: "How well it fits this business, 0-100" },
-          why: { ...str, description: "Why this program fits (or doesn't yet) for this specific business" },
-          whatYouGet: { ...str, description: "What the business would get from this program" },
+          matchScore: { ...int, description: "0-100" },
+          why: str,
+          whatYouGet: str,
         },
         required: ["service", "fit", "matchScore", "why", "whatYouGet"],
       },
     },
-    nextSteps: {
-      type: "ARRAY",
-      description: "3-5 concrete, sequenced next steps the owner should take",
-      items: {
-        type: "OBJECT",
-        properties: { title: str, detail: str },
-        required: ["title", "detail"],
-      },
-    },
-    consultationPitch: {
-      ...str,
-      description:
-        "One warm, specific sentence inviting them to book a consultation with Soulful Labs, referencing their situation",
-    },
+    consultationPitch: { ...str, description: "One warm, specific sentence inviting a Soulful Labs consultation" },
   },
   required: [
-    "businessName",
-    "industry",
-    "stage",
-    "stageRationale",
-    "summary",
-    "overallScore",
-    "snapshot",
-    "growthOpportunities",
-    "aiOpportunities",
-    "expansionStrategies",
-    "recommendedServices",
-    "nextSteps",
+    "businessName", "industry", "stage", "stageRationale", "summary", "snapshot",
+    "growthOpportunities", "aiOpportunities", "swot", "expansionStrategies",
+    "competitorBenchmark", "personas", "journey", "roadmap", "recommendedServices",
     "consultationPitch",
   ],
 };
 
-const SERVICE_BRIEF = `SOULFUL LABS PROGRAMS (recommend the best-fit ones):
-- Incubation (0 -> 1): for idea-stage / pre-launch founders. Hands-on help to validate, shape brand & product, and build a real foundation from scratch.
-- Acceleration (1 -> 10): for businesses that already have traction and want to scale — growth strategy, distribution, go-to-market.
-- AI Tools (automate): ready-to-use AI products and automations that remove manual work across marketing, operations, sales, and support.
-- Projects & Consulting (custom): bespoke builds and expert strategy for a specific, defined need — custom software or a focused growth/strategy engagement.`;
+const SERVICE_BRIEF = `SOULFUL LABS PROGRAMS:
+- Incubation (0 -> 1): idea-stage / pre-launch founders. Validate, brand, and build a foundation.
+- Acceleration (1 -> 10): businesses with traction — growth, distribution, go-to-market.
+- AI Tools (automate): ready-to-use AI automations that remove manual work.
+- Projects & Consulting (custom): bespoke builds or a focused strategy engagement.`;
 
-function buildPrompt(context) {
+function auditEvidenceText(audit) {
+  if (!audit?.available) return "No website/GBP audit available — rely on the owner's description.";
+  const lines = [`Measured digital audit score: ${audit.score}/100 (source: ${audit.source}).`];
+  for (const cat of audit.categories) {
+    if (cat.score == null) continue;
+    lines.push(`- ${cat.label} (${cat.score}/100): ` + cat.checks.map((c) => `${c.label}=${c.status} [${c.evidence}]`).join("; "));
+  }
+  return lines.join("\n");
+}
+
+function buildPrompt(context, audit, stage) {
   const { input, website, businessName } = context;
   const lines = [
     "You are a senior business growth advisor at Soulful Labs, an AI-first venture studio.",
-    "Analyze the business below and produce a personalized 'Business Possibilities' report that helps the owner understand their next best steps, and recommends the most relevant Soulful Labs program(s).",
-    "Be specific and grounded in the details provided — reference their industry, stage, and stated challenges. Where information is missing, treat it as a gap or an assumption to make explicit, never invent facts that contradict the inputs.",
+    "Produce a personalized Business Possibilities report. CRITICAL: ground every score, SWOT point, and insight in the MEASURED AUDIT EVIDENCE below — do not assert numbers the evidence can't support. Where evidence is missing, say so rather than inventing it.",
     "",
     SERVICE_BRIEF,
     "",
     `BUSINESS NAME (best guess): ${businessName}`,
-    `INDUSTRY: ${input.industry || "not specified — infer from the website/details"}`,
-    `SELF-REPORTED STAGE: ${input.stage || "not specified — infer it"}`,
+    `INDUSTRY: ${input.industry || "infer from the site/details"}`,
+    `DETECTED STAGE (use this): ${stage.label} — ${stage.rationale}`,
     `PRIMARY GOAL: ${input.goal || "not specified"}`,
     `CURRENT CHALLENGES: ${input.challenges?.length ? input.challenges.join("; ") : "not specified"}`,
+    input.revenueBand ? `REVENUE: ${input.revenueBand}` : "",
+    input.teamSize ? `TEAM SIZE: ${input.teamSize}` : "",
+    input.locations ? `LOCATIONS: ${input.locations}` : "",
+    input.channels?.length ? `SALES CHANNELS: ${input.channels.join(", ")}` : "",
   ];
 
-  if (input.businessDetails) {
-    lines.push("", "BUSINESS DETAILS (owner's own words):", input.businessDetails);
-  }
+  if (input.businessDetails) lines.push("", "BUSINESS DETAILS (owner's words):", input.businessDetails);
 
-  if (website) {
-    lines.push(
-      "",
-      "WEBSITE SIGNALS:",
-      JSON.stringify(
-        {
-          url: website.url,
-          reachable: website.reachable,
-          https: website.https,
-          title: website.title,
-          metaDescription: website.metaDescription,
-          ogTitle: website.ogTitle,
-          h1: website.h1,
-          h2: website.h2,
-          hasStructuredData: website.hasStructuredData,
-          hasWhatsApp: website.hasWhatsApp,
-          hasBookingHints: website.hasBookingHints,
-          approxWordCount: website.approxWordCount,
-          socialLinksFoundOnSite: website.socialLinksOnSite,
-          error: website.error,
-        },
-        null,
-        1
-      ),
-      website.textSample ? `WEBSITE TEXT SAMPLE:\n${website.textSample}` : ""
-    );
-  }
+  lines.push("", "MEASURED AUDIT EVIDENCE:", auditEvidenceText(audit));
+
+  if (website?.textSample) lines.push("", "WEBSITE TEXT SAMPLE:", website.textSample);
 
   lines.push(
     "",
-    "Return the full report as JSON matching the response schema.",
-    "The recommendedServices array MUST contain all four programs, ranked by fit for this business with exactly one clear 'Best fit'.",
-    "The expansionStrategies MUST address building a brand, expanding distribution, manufacturing in-house, and launching new products, each with an honest recommendation for THIS business.",
-    "Keep every text field crisp and confident — this renders in a premium dashboard for a real business owner."
+    "Return the report as JSON per the schema.",
+    "Quantify each AI opportunity with realistic hoursSavedPerWeek and monthlySavingsInr for a business of this size/stage.",
+    "recommendedServices MUST include all four programs ranked by fit with exactly one 'Best fit'.",
+    "expansionStrategies MUST cover building a brand, expanding distribution, manufacturing in-house, and launching new products.",
+    "Every SWOT point must cite a concrete finding in its evidence field. Keep all text crisp and confident."
   );
 
   return lines.filter((l) => l !== "").join("\n");
@@ -206,8 +265,6 @@ function buildPrompt(context) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// These are frequently rate-limited or capacity-constrained on shared keys, so
-// we try several in order before giving up. GEMINI_MODEL (if set) goes first.
 const DEFAULT_MODELS = [
   "gemini-flash-latest",
   "gemini-flash-lite-latest",
@@ -218,20 +275,15 @@ const DEFAULT_MODELS = [
 function modelChain() {
   const preferred = process.env.GEMINI_MODEL?.trim();
   const chain = preferred ? [preferred, ...DEFAULT_MODELS] : [...DEFAULT_MODELS];
-  return [...new Set(chain)]; // de-dupe while preserving order
+  return [...new Set(chain)];
 }
 
-// 429 (rate limit) and 5xx (overload/unavailable) are worth retrying on another
-// model; 400/401/403 are configuration problems that won't fix themselves.
 const isRetryable = (status) => status === 429 || status >= 500;
 
 async function callModel(model, apiKey, prompt) {
   const res = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
@@ -258,46 +310,37 @@ async function callModel(model, apiKey, prompt) {
   try {
     report = JSON.parse(text);
   } catch {
-    // Occasionally the model wraps JSON in fences despite the mime type.
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error("Gemini response was not valid JSON");
     report = JSON.parse(match[0]);
   }
 
-  if (
-    typeof report.overallScore !== "number" ||
-    !Array.isArray(report.snapshot) ||
-    !Array.isArray(report.recommendedServices)
-  ) {
+  if (!Array.isArray(report.snapshot) || !Array.isArray(report.recommendedServices)) {
     throw new Error("Gemini response did not match the report shape");
   }
   return report;
 }
 
-export async function generateReport(context) {
+export async function generateReport(context, audit, stage) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
-  const prompt = buildPrompt(context);
+  const prompt = buildPrompt(context, audit, stage);
   const models = modelChain();
   let lastErr;
 
   for (const model of models) {
-    // One quick retry per model absorbs a brief 503 spike before moving on.
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         return await callModel(model, apiKey, prompt);
       } catch (err) {
         lastErr = err;
         const status = err.status;
-        if (status && !isRetryable(status)) {
-          // Auth/config error: no other model will behave differently.
-          throw err;
-        }
+        if (status && !isRetryable(status)) throw err;
         if (attempt === 0 && isRetryable(status)) {
           await sleep(1200);
           continue;
         }
-        break; // move to the next model in the chain
+        break;
       }
     }
   }

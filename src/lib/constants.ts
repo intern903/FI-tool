@@ -45,6 +45,38 @@ export const GOALS = [
   "Explore what's possible",
 ] as const;
 
+export const REVENUE_BANDS = [
+  "Pre-revenue",
+  "Under ₹5L / year",
+  "₹5L – ₹50L / year",
+  "₹50L – ₹5Cr / year",
+  "₹5Cr+ / year",
+] as const;
+
+export const TEAM_SIZES = [
+  "Just me",
+  "2–10",
+  "11–50",
+  "51–200",
+  "200+",
+] as const;
+
+export const LOCATION_COUNTS = [
+  "Online only",
+  "1 location",
+  "2–5 locations",
+  "6+ locations",
+] as const;
+
+export const CHANNELS = [
+  "Own website",
+  "Marketplaces (Amazon, etc.)",
+  "Retail / in-store",
+  "Social selling",
+  "Wholesale / B2B",
+  "Resellers / distributors",
+] as const;
+
 export const CHALLENGES = [
   "Not enough customers or leads",
   "Low brand awareness",

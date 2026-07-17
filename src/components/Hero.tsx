@@ -2,13 +2,22 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, ChevronDown, Globe, Sparkles } from "lucide-react";
+import { ArrowRight, ChevronDown, Globe, MapPin, Sparkles } from "lucide-react";
 import {
   analyzeInputSchema,
   type AnalyzeFormValues,
   type AnalyzeInput,
 } from "@/lib/types";
-import { CHALLENGES, GOALS, INDUSTRIES, STAGES } from "@/lib/constants";
+import {
+  CHALLENGES,
+  CHANNELS,
+  GOALS,
+  INDUSTRIES,
+  LOCATION_COUNTS,
+  REVENUE_BANDS,
+  STAGES,
+  TEAM_SIZES,
+} from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { ParticleField } from "./ParticleField";
 
@@ -17,6 +26,8 @@ interface HeroProps {
   analyzing: boolean;
   error?: string | null;
 }
+
+type Register = ReturnType<typeof useForm<AnalyzeFormValues>>["register"];
 
 function Select({
   label,
@@ -27,7 +38,7 @@ function Select({
   label: string;
   placeholder: string;
   options: readonly string[];
-  registerProps: ReturnType<ReturnType<typeof useForm<AnalyzeFormValues>>["register"]>;
+  registerProps: ReturnType<Register>;
 }) {
   return (
     <div>
@@ -53,10 +64,45 @@ function Select({
   );
 }
 
+function Chips({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: readonly string[];
+  selected: string[];
+  onToggle: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((c) => {
+        const active = selected.includes(c);
+        return (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onToggle(c)}
+            aria-pressed={active}
+            className={cn(
+              "rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 ease-out",
+              active
+                ? "border-sage-500 bg-sage-100 text-sage-900"
+                : "border-ink-900/10 bg-white text-ink-500 hover:border-ink-900/20 hover:text-ink-900"
+            )}
+          >
+            {c}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Hero({ onAnalyze, analyzing, error }: HeroProps) {
   const [websiteFocused, setWebsiteFocused] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [challenges, setChallenges] = useState<string[]>([]);
+  const [channels, setChannels] = useState<string[]>([]);
   const {
     register,
     handleSubmit,
@@ -65,8 +111,8 @@ export function Hero({ onAnalyze, analyzing, error }: HeroProps) {
     resolver: zodResolver(analyzeInputSchema),
   });
 
-  const toggleChallenge = (c: string) =>
-    setChallenges((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  const toggle = (list: string[], set: (v: string[]) => void, c: string) =>
+    set(list.includes(c) ? list.filter((x) => x !== c) : [...list, c]);
 
   const websiteReg = register("websiteUrl");
 
@@ -103,15 +149,15 @@ export function Hero({ onAnalyze, analyzing, error }: HeroProps) {
           transition={{ duration: 0.3, delay: 0.1, ease: "easeOut" }}
           className="mt-5 max-w-lg text-base text-ink-500 sm:text-lg"
         >
-          Share your website and a few details. Get a personalized AI growth
-          report — and the clear next step for your business.
+          Share your website and a few details. Get a personalized, evidence-based
+          growth report — and the clear next step for your business.
         </motion.p>
 
         <motion.form
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.16, ease: "easeOut" }}
-          onSubmit={handleSubmit((data) => onAnalyze({ ...data, challenges }))}
+          onSubmit={handleSubmit((data) => onAnalyze({ ...data, challenges, channels }))}
           className="glass mt-10 w-full rounded-2xl p-5 text-left shadow-lift sm:p-6"
           noValidate
         >
@@ -157,56 +203,33 @@ export function Hero({ onAnalyze, analyzing, error }: HeroProps) {
             </div>
           </div>
 
-          {/* Industry + stage */}
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <Select label="Industry" placeholder="Select your industry" options={INDUSTRIES} registerProps={register("industry")} />
             <Select label="Business stage" placeholder="Select your stage" options={STAGES} registerProps={register("stage")} />
           </div>
 
-          {/* Goal */}
           <div className="mt-4">
             <Select label="Primary goal" placeholder="What matters most right now?" options={GOALS} registerProps={register("goal")} />
           </div>
 
-          {/* Challenges */}
           <div className="mt-4">
             <label className="mb-2 block text-xs font-semibold text-ink-500">
               Current challenges <span className="font-normal text-ink-300">select any</span>
             </label>
-            <div className="flex flex-wrap gap-2">
-              {CHALLENGES.map((c) => {
-                const active = challenges.includes(c);
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => toggleChallenge(c)}
-                    aria-pressed={active}
-                    className={cn(
-                      "rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 ease-out",
-                      active
-                        ? "border-sage-500 bg-sage-100 text-sage-900"
-                        : "border-ink-900/10 bg-white text-ink-500 hover:border-ink-900/20 hover:text-ink-900"
-                    )}
-                  >
-                    {c}
-                  </button>
-                );
-              })}
-            </div>
+            <Chips options={CHALLENGES} selected={challenges} onToggle={(c) => toggle(challenges, setChallenges, c)} />
           </div>
 
-          {/* Optional business details */}
+          {/* Optional deeper inputs */}
           <button
             type="button"
-            onClick={() => setShowDetails((s) => !s)}
+            onClick={() => setShowMore((s) => !s)}
             className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-ink-500 transition-colors hover:text-ink-900"
           >
-            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", showDetails && "rotate-180")} />
-            {showDetails ? "Hide business details" : "No website? Describe your business instead"}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", showMore && "rotate-180")} />
+            {showMore ? "Hide extra details" : "Add more for a sharper report (optional)"}
           </button>
           <AnimatePresence initial={false}>
-            {showDetails && (
+            {showMore && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
@@ -214,12 +237,51 @@ export function Hero({ onAnalyze, analyzing, error }: HeroProps) {
                 transition={{ duration: 0.25, ease: "easeOut" }}
                 className="overflow-hidden"
               >
-                <textarea
-                  {...register("businessDetails")}
-                  rows={4}
-                  placeholder="Tell us what your business does, who you serve, and where you'd like to grow…"
-                  className="mt-3 w-full resize-none rounded-xl border border-ink-900/10 bg-white p-3.5 text-sm text-ink-900 placeholder:text-ink-300 transition-all duration-200 ease-out hover:border-ink-900/20 focus:border-sage-500 focus:shadow-input-glow focus:outline-none"
-                />
+                <div className="space-y-4 pt-4">
+                  <div>
+                    <label htmlFor="gbpUrl" className="mb-1.5 block text-xs font-semibold text-ink-500">
+                      Google Business Profile URL <span className="font-normal text-ink-300">for local audit</span>
+                    </label>
+                    <div className="relative flex items-center rounded-xl border border-ink-900/10 bg-white focus-within:border-sage-500 focus-within:shadow-input-glow">
+                      <MapPin className="ml-3.5 h-4 w-4 shrink-0 text-ink-300" />
+                      <input
+                        id="gbpUrl"
+                        type="text"
+                        inputMode="url"
+                        autoComplete="off"
+                        placeholder="https://maps.google.com/…"
+                        className="h-12 w-full bg-transparent px-3 text-sm text-ink-900 placeholder:text-ink-300 focus:outline-none"
+                        {...register("gbpUrl")}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <Select label="Annual revenue" placeholder="Select" options={REVENUE_BANDS} registerProps={register("revenueBand")} />
+                    <Select label="Team size" placeholder="Select" options={TEAM_SIZES} registerProps={register("teamSize")} />
+                    <Select label="Locations" placeholder="Select" options={LOCATION_COUNTS} registerProps={register("locations")} />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold text-ink-500">
+                      Sales channels <span className="font-normal text-ink-300">select any</span>
+                    </label>
+                    <Chips options={CHANNELS} selected={channels} onToggle={(c) => toggle(channels, setChannels, c)} />
+                  </div>
+
+                  <div>
+                    <label htmlFor="businessDetails" className="mb-1.5 block text-xs font-semibold text-ink-500">
+                      Business details <span className="font-normal text-ink-300">no website? describe it here</span>
+                    </label>
+                    <textarea
+                      id="businessDetails"
+                      {...register("businessDetails")}
+                      rows={3}
+                      placeholder="What your business does, who you serve, and where you'd like to grow…"
+                      className="w-full resize-none rounded-xl border border-ink-900/10 bg-white p-3.5 text-sm text-ink-900 placeholder:text-ink-300 transition-all duration-200 ease-out hover:border-ink-900/20 focus:border-sage-500 focus:shadow-input-glow focus:outline-none"
+                    />
+                  </div>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -241,9 +303,7 @@ export function Hero({ onAnalyze, analyzing, error }: HeroProps) {
             <ArrowRight className="h-5 w-5 transition-transform duration-200 ease-out group-hover:translate-x-[3px]" />
           </motion.button>
 
-          <p className="mt-3 text-center text-xs text-ink-400">
-            Free · No sign-up · Takes 20–40 seconds
-          </p>
+          <p className="mt-3 text-center text-xs text-ink-400">Free · No sign-up · Takes 20–40 seconds</p>
         </motion.form>
       </div>
     </section>

@@ -23,3 +23,11 @@ export function scoreColor(score: number): string {
   if (score >= 50) return "#C97E13";
   return "#D5484F";
 }
+
+// Audit check statuses ship with an icon + label, never color alone.
+export const status = {
+  pass: { text: "#3C554F", bg: "#E4ECE9", dot: "#0F8A70" },
+  warn: { text: "#8A5406", bg: "#FCEBCB", dot: "#C97E13" },
+  fail: { text: "#A32E3C", bg: "#FCE4E1", dot: "#D5484F" },
+  na: { text: "#6B645C", bg: "#F0E1CF", dot: "#B3ABA1" },
+} as const;
